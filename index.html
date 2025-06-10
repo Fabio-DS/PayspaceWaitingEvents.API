@@ -1,0 +1,1470 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaySpace Waiting Events Processor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .step-container {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .step-number {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: white;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .workflow-section {
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px dashed #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">PaySpace Waiting Events Processor</h1>
+
+        <!-- SECTION 1: FILE UPLOAD AND PROCESSING -->
+        <div class="workflow-section">
+            <h2 class="mb-3">1. File Upload and Processing</h2>
+            <div class="step-container">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <h3>Upload Waiting Events File</h3>
+                </div>
+                <form id="uploadForm">
+                    <div class="mb-3">
+                        <label for="fileInput" class="form-label">Select Excel File</label>
+                        <input class="form-control" type="file" id="fileInput" accept=".xlsx,.xls">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload and Process</button>
+                </form>
+                <div id="uploadResult" class="mt-3"></div>
+            </div>
+        </div>
+
+        <!-- SECTION 2: MAPPING -->
+        <div class="workflow-section">
+            <h2 class="mb-3">2. Mapping Entries</h2>
+            <div class="step-container">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <h3>Select Company and Frequency for Mapping</h3>
+                </div>
+                <p class="text-muted mb-3">Select a company and frequency from the database to map the processed entries.</p>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="mappingCompanySelect" class="form-label">Company</label>
+                        <select class="form-select" id="mappingCompanySelect" disabled>
+                            <option selected disabled>Choose company...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="mappingFrequencySelect" class="form-label">Frequency</label>
+                        <select class="form-select" id="mappingFrequencySelect" disabled>
+                            <option selected disabled>Choose frequency...</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="mapBtn" class="btn btn-primary" disabled>Map Entries</button>
+                <div id="mappingResult" class="mt-3"></div>
+                <div class="d-flex gap-2 mt-3">
+                    <button id="exportOriginalBtn" class="btn btn-secondary" disabled>Export Original Data</button>
+                    <button id="exportMappedBtn" class="btn btn-secondary" disabled>Export Mapped Data</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: PAYSPACE UPLOAD -->
+        <div class="workflow-section">
+            <h2 class="mb-3">3. Upload to PaySpace</h2>
+            <div class="step-container">
+                <div class="step-header">
+                    <div class="step-number">3</div>
+                    <h3>Select PaySpace Company, Frequency, and Run</h3>
+                </div>
+                <p class="text-muted mb-3">Select company, frequency, and run information directly from PaySpace to upload the mapped data.</p>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="payspaceCompanySelect" class="form-label">PaySpace Company</label>
+                        <select class="form-select" id="payspaceCompanySelect" disabled>
+                            <option selected disabled>Choose company...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="payspaceFrequencySelect" class="form-label">PaySpace Frequency</label>
+                        <select class="form-select" id="payspaceFrequencySelect" disabled>
+                            <option selected disabled>Choose frequency...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="payspaceRunSelect" class="form-label">PaySpace Run</label>
+                        <select class="form-select" id="payspaceRunSelect" disabled>
+                            <option selected disabled>Choose run...</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="uploadToPayspaceBtn" class="btn btn-success" disabled>Upload to PaySpace</button> <button id="viewUploadHistoryBtn" class="btn btn-outline-info ms-2"><i class="bi bi-clock-history"></i> Upload History</button>
+                <div id="uploadToPayspaceResult" class="mt-3"></div>
+            </div>
+        </div>
+
+        <!-- MAPPING MANAGEMENT SECTION -->
+        <div class="step-container">
+            <div class="step-header">
+                <div class="step-number">4</div>
+                <h3>Mapping Management</h3>
+            </div>
+            <ul class="nav nav-tabs mb-3" id="mappingTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="view-tab" data-bs-toggle="tab" data-bs-target="#view-mappings" type="button" role="tab" aria-controls="view-mappings" aria-selected="true">View Mappings</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#add-mapping" type="button" role="tab" aria-controls="add-mapping" aria-selected="false">Add Mapping</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="bulk-tab" data-bs-toggle="tab" data-bs-target="#bulk-upload" type="button" role="tab" aria-controls="bulk-upload" aria-selected="false">Bulk Upload</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="template-tab" data-bs-toggle="tab" data-bs-target="#download-template" type="button" role="tab" aria-controls="download-template" aria-selected="false">Download Template</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="logical-id-tab" data-bs-toggle="tab" data-bs-target="#logical-id-management" type="button" role="tab" aria-controls="logical-id-management" aria-selected="false">Logical ID Mapping</button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="mappingTabsContent">
+                <!-- View Mappings Tab -->
+                <div class="tab-pane fade show active" id="view-mappings" role="tabpanel" aria-labelledby="view-tab">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="viewMappingCompanySelect" class="form-label">Company</label>
+                            <select class="form-select" id="viewMappingCompanySelect">
+                                <option selected disabled>Choose company...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="loadMappingsBtn" class="btn btn-primary mb-3" disabled>Load Mappings</button>
+
+                    <div id="mappingsTableContainer" class="mt-3">
+                    </div>
+                </div>
+
+                <!-- Add Mapping Tab -->
+                <div class="tab-pane fade" id="add-mapping" role="tabpanel" aria-labelledby="add-tab">
+                    <form id="addMappingForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="addMappingCompanySelect" class="form-label">Company</label>
+                                <select class="form-select" id="addMappingCompanySelect" required>
+                                    <option selected disabled value="">Choose company...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="payElementId" class="form-label">Pay Element ID</label>
+                                <input type="text" class="form-control" id="payElementId" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="componentCode" class="form-label">Component Code</label>
+                                <input type="text" class="form-control" id="componentCode" required>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="frequency" class="form-label">Frequency</label>
+                                <input type="text" class="form-control" id="frequency" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="description" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="description">
+                            </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" value="" id="isActive" checked>
+                            <label class="form-check-label" for="isActive">
+                                Active
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Mapping</button>
+                    </form>
+                    <div id="addMappingResult" class="mt-3"></div>
+                </div>
+
+                <!-- Bulk Upload Tab -->
+                <div class="tab-pane fade" id="bulk-upload" role="tabpanel" aria-labelledby="bulk-tab">
+                    <form id="bulkUploadForm">
+                        <div class="mb-3">
+                            <label for="mappingFileInput" class="form-label">Select Mappings File (Excel or CSV)</label>
+                            <input class="form-control" type="file" id="mappingFileInput" accept=".xlsx,.xls,.csv">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Upload Mappings</button>
+                    </form>
+                    <div id="bulkUploadResult" class="mt-3"></div>
+                </div>
+
+                <!-- Download Template Tab -->
+                <div class="tab-pane fade" id="download-template" role="tabpanel" aria-labelledby="template-tab">
+                    <p>Download a template file to use for bulk uploading mappings:</p>
+                    <button id="downloadTemplateBtn" class="btn btn-primary">Download Template</button>
+                </div>
+
+                <!-- Logical ID Management Tab -->
+                <div class="tab-pane fade" id="logical-id-management" role="tabpanel" aria-labelledby="logical-id-tab">
+                    <div class="alert alert-info mb-3">
+                        Manage Logical ID prefixes for companies. These are used to automatically select the right company when uploading waiting events files.
+                    </div>
+
+                    <button id="loadCompaniesForLogicalIdBtn" class="btn btn-primary mb-3">Load Companies</button>
+
+                    <div id="logicalIdTableContainer" class="mt-3">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="uploadHistoryModal" tabindex="-1" aria-labelledby="uploadHistoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadHistoryModalLabel">Upload History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="uploadHistoryContainer">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload History Details Modal -->
+    <div class="modal fade" id="uploadHistoryDetailsModal" tabindex="-1" aria-labelledby="uploadHistoryDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadHistoryDetailsModalLabel">Upload Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="uploadHistoryDetailsContainer">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="downloadHistoryBtn">Download Excel Report</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+
+        const API_BASE_URL = '/api';
+        let currentHistoryId = null;
+
+        async function callApi(endpoint, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: {}
+            };
+
+            if (body) {
+                if (body instanceof FormData) {
+                    options.body = body;
+                } else {
+                    options.headers['Content-Type'] = 'application/json';
+                    options.body = JSON.stringify(body);
+                    console.log(`${method} ${endpoint} request body:`, body);
+                    console.log('JSON payload:', options.body);
+                }
+            }
+
+            try {
+                console.log(`Making ${method} request to ${endpoint}`);
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                console.log(`Response status: ${response.status} ${response.statusText}`);
+
+                if (!response.ok) {
+                    let errorMessage;
+                    try {
+                        const contentType = response.headers.get('content-type');
+                        if (contentType && contentType.includes('application/json')) {
+                            const errorData = await response.json();
+                            console.error("API Error Response (JSON):", errorData);
+                            errorMessage = errorData.error || errorData.message || `Server responded with ${response.status}`;
+                        } else {
+                            const errorText = await response.text();
+                            console.error("API Error Response (Text):", errorText);
+                            errorMessage = `Server responded with ${response.status}: ${errorText}`;
+                        }
+                    } catch (parseError) {
+                        console.error("Error parsing error response:", parseError);
+                        errorMessage = `Server responded with ${response.status}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                if (response.status === 204) return null;
+
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    console.log(`API response for ${method} ${endpoint}:`, data);
+                    return data;
+                }
+
+                return await response.blob();
+            } catch (error) {
+                console.error(`API call failed for ${endpoint}:`, error);
+                throw error;
+            }
+        }
+
+
+        async function loadCompanies() {
+            try {
+                console.log("Starting to load companies from both sources");
+
+                const dbCompanies = await callApi('/waitingevents/db-companies');
+                console.log("Database companies:", dbCompanies);
+
+                const payspaceCompanies = await callApi('/waitingevents/companies');
+                console.log("PaySpace companies:", payspaceCompanies);
+
+                // Mapping Section Dropdowns - Using Db Companies
+                const mappingCompanySelect = document.getElementById('mappingCompanySelect');
+                mappingCompanySelect.innerHTML = '<option selected disabled>Choose company...</option>';
+
+                const viewMappingCompanySelect = document.getElementById('viewMappingCompanySelect');
+                viewMappingCompanySelect.innerHTML = '<option selected disabled>Choose company...</option>';
+
+                const addMappingCompanySelect = document.getElementById('addMappingCompanySelect');
+                addMappingCompanySelect.innerHTML = '<option selected disabled value="">Choose company...</option>';
+
+                if (dbCompanies && dbCompanies.length > 0) {
+                    console.log(`Adding ${dbCompanies.length} database companies to mapping dropdowns`);
+
+                    dbCompanies.forEach(company => {
+                        // Mapping dropdown for section 2
+                        const option1 = document.createElement('option');
+                        option1.value = company.id;
+                        option1.textContent = `${company.companyName} (${company.companyCode})`;
+                        mappingCompanySelect.appendChild(option1);
+
+                        // View mapping dropdown for section 4
+                        const option3 = document.createElement('option');
+                        option3.value = company.id;
+                        option3.textContent = `${company.companyName} (${company.companyCode})`;
+                        viewMappingCompanySelect.appendChild(option3);
+
+                        // Add mapping dropdown for section 4
+                        const option4 = document.createElement('option');
+                        option4.value = company.id;
+                        option4.textContent = `${company.companyName} (${company.companyCode})`;
+                        addMappingCompanySelect.appendChild(option4);
+                    });
+
+                    console.log("Database companies added to mapping dropdowns");
+                } else {
+                    console.warn("No database companies found");
+                }
+
+                // Payspace Upload Section
+                const payspaceCompanySelect = document.getElementById('payspaceCompanySelect');
+                payspaceCompanySelect.innerHTML = '<option selected disabled>Choose company...</option>';
+
+                if (payspaceCompanies && payspaceCompanies.length > 0) {
+                    console.log(`Adding ${payspaceCompanies.length} PaySpace companies to PaySpace dropdown`);
+
+                    payspaceCompanies.forEach(company => {
+                        const option2 = document.createElement('option');
+                        option2.value = company.id;
+                        option2.textContent = `${company.companyName} (${company.companyCode})`;
+                        payspaceCompanySelect.appendChild(option2);
+                    });
+
+                    console.log("PaySpace companies added to PaySpace dropdown");
+                } else {
+                    console.warn("No PaySpace companies found");
+                }
+
+                setupSelectListeners();
+            } catch (error) {
+                console.error('Error loading companies:', error);
+            }
+        }
+
+        function setupSelectListeners() {
+            console.log("Setting up event listeners for select dropdowns");
+
+            const viewMappingCompanySelect = document.getElementById('viewMappingCompanySelect');
+            const newViewMappingSelect = viewMappingCompanySelect.cloneNode(true);
+            viewMappingCompanySelect.parentNode.replaceChild(newViewMappingSelect, viewMappingCompanySelect);
+            newViewMappingSelect.addEventListener('change', function () {
+                console.log('View mapping company selected:', this.value);
+                document.getElementById('loadMappingsBtn').disabled = false;
+            });
+
+            const mappingCompanySelect = document.getElementById('mappingCompanySelect');
+            const newMappingSelect = mappingCompanySelect.cloneNode(true);
+            mappingCompanySelect.parentNode.replaceChild(newMappingSelect, mappingCompanySelect);
+            newMappingSelect.addEventListener('change', async function (e) {
+                console.log('DIRECT: Mapping company selected:', this.value);
+                const companyId = this.value;
+                const frequencySelect = document.getElementById('mappingFrequencySelect');
+
+                frequencySelect.innerHTML = '<option selected disabled>Choose frequency...</option>';
+                frequencySelect.disabled = true;
+
+                try {
+                    console.log(`DIRECT: Fetching database frequencies for company ID ${companyId}`);
+                    const fullUrl = `/api/waitingevents/db-frequencies/${companyId}`;
+                    console.log(`DIRECT: Full URL being used: ${fullUrl}`);
+
+                    const response = await fetch(fullUrl);
+                    console.log(`DIRECT: Response status: ${response.status}`);
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+
+                    const frequencies = await response.json();
+                    console.log(`DIRECT: Received ${frequencies ? frequencies.length : 0} frequencies from database`, frequencies);
+
+                    if (frequencies && frequencies.length > 0) {
+                        frequencies.forEach(frequency => {
+                            const option = document.createElement('option');
+                            option.value = frequency;
+                            option.textContent = frequency;
+                            frequencySelect.appendChild(option);
+                        });
+
+                        frequencySelect.disabled = false;
+                        console.log("DIRECT: Database frequencies added to frequency dropdown");
+                    } else {
+                        alert('No frequencies found for this company in the database');
+                    }
+                } catch (error) {
+                    console.error('DIRECT: Error loading frequencies from database:', error);
+                    alert(`Error loading frequencies: ${error.message}`);
+                }
+            });
+
+            const payspaceCompanySelect = document.getElementById('payspaceCompanySelect');
+            const newPayspaceSelect = payspaceCompanySelect.cloneNode(true);
+            payspaceCompanySelect.parentNode.replaceChild(newPayspaceSelect, payspaceCompanySelect);
+            newPayspaceSelect.addEventListener('change', async function (e) {
+                console.log('PaySpace company selected:', this.value);
+                const companyId = this.value;
+                const frequencySelect = document.getElementById('payspaceFrequencySelect');
+
+                frequencySelect.innerHTML = '<option selected disabled>Choose frequency...</option>';
+                frequencySelect.disabled = true;
+
+                try {
+                    console.log(`Fetching PaySpace frequencies for company ID ${companyId}`);
+                    const frequencies = await callApi(`/waitingevents/frequencies/${companyId}`);
+                    console.log(`Received ${frequencies ? frequencies.length : 0} frequencies from PaySpace`, frequencies);
+
+                    if (frequencies && frequencies.length > 0) {
+                        frequencies.forEach(frequency => {
+                            const option = document.createElement('option');
+                            option.value = frequency;
+                            option.textContent = frequency;
+                            frequencySelect.appendChild(option);
+                        });
+
+                        frequencySelect.disabled = false;
+                        console.log("PaySpace frequencies added to frequency dropdown");
+                    } else {
+                        alert('No frequencies found for this company in PaySpace');
+                    }
+                } catch (error) {
+                    console.error('Error loading frequencies from PaySpace:', error);
+                }
+            });
+
+            console.log("Event listeners setup completed");
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('fileInput');
+            const resultDiv = document.getElementById('uploadResult');
+
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<div class="alert alert-danger">Please select a file</div>';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            resultDiv.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+            try {
+                const result = await callApi('/waitingevents/upload', 'POST', formData);
+
+                resultDiv.innerHTML = `
+                            <div class="alert alert-success">
+                                <h5>${result.message}</h5>
+                                <p>Total entries: ${result.totalEntriesFound}</p>
+                                <p>Unique employees: ${result.summary.uniqueEmployees}</p>
+                                <p>Distinct pay elements: ${result.summary.payElements}</p>
+                                <p>Total amount: $${result.summary.totalAmount.toFixed(2)}</p>
+                            </div>
+                        `;
+
+                document.getElementById('mappingCompanySelect').disabled = false;
+                document.getElementById('exportOriginalBtn').disabled = false;
+
+                // Auto-selection based on Logical ID
+                if (result.logicalIdPrefix) {
+                    console.log(`Found Logical ID prefix: ${result.logicalIdPrefix}`);
+                    try {
+                        // Try to find matching company
+                        const companyMatch = await callApi(`/waitingevents/company-by-logical-id/${result.logicalIdPrefix}`);
+                        console.log('Found matching company:', companyMatch);
+
+                        // Auto-select company in mapping section
+                        const mappingCompanySelect = document.getElementById('mappingCompanySelect');
+                        for (let i = 0; i < mappingCompanySelect.options.length; i++) {
+                            if (mappingCompanySelect.options[i].value == companyMatch.id) {
+                                mappingCompanySelect.selectedIndex = i;
+                                mappingCompanySelect.dispatchEvent(new Event('change'));
+
+                                resultDiv.innerHTML += `
+                        <div class="alert alert-info mt-2">
+                            Company "${companyMatch.companyName}" was automatically selected based on the file's Logical ID.
+                        </div>
+                    `;
+
+                                // Also select the same company in PaySpace section if found
+                                setTimeout(() => {
+                                    const companyName = companyMatch.companyName;
+                                    console.log(`Looking for PaySpace company matching name: ${companyName}`);
+                                    const payspaceCompanySelect = document.getElementById('payspaceCompanySelect');
+                                    payspaceCompanySelect.disabled = false;
+
+                                    let found = false;
+                                    for (let j = 0; j < payspaceCompanySelect.options.length; j++) {
+                                        const option = payspaceCompanySelect.options[j];
+                                        const optionText = option.textContent;
+
+                                        // Extract just the company name (text before any brackets)
+                                        const payspaceCompanyName = optionText.split('(')[0].trim();
+                                        const dbCompanyName = companyName.split('(')[0].trim();
+
+                                        console.log(`Comparing: "${payspaceCompanyName}" with "${dbCompanyName}"`);
+
+                                        // Check for exact match
+                                        if (payspaceCompanyName === dbCompanyName) {
+                                            console.log(`Found exact matching PaySpace company at index ${j}`);
+                                            payspaceCompanySelect.selectedIndex = j;
+                                            payspaceCompanySelect.dispatchEvent(new Event('change'));
+                                            found = true;
+                                            break;
+                                        }
+
+                                        // Check for test
+                                        const testVariant = dbCompanyName + " - Test";
+                                        if (payspaceCompanyName === testVariant) {
+                                            console.log(`Found test environment match for PaySpace company at index ${j}`);
+                                            payspaceCompanySelect.selectedIndex = j;
+                                            payspaceCompanySelect.dispatchEvent(new Event('change'));
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (!found) {
+                                        console.warn(`Could not find PaySpace company matching name: ${companyName}`);
+                                    }
+                                }, 1000);
+
+                                break;
+                            }
+                        }
+
+                        // Auto-select first frequency after it loads
+                        setTimeout(() => {
+                            const mappingFrequencySelect = document.getElementById('mappingFrequencySelect');
+                            if (!mappingFrequencySelect.disabled && mappingFrequencySelect.options.length > 1) {
+                                mappingFrequencySelect.selectedIndex = 1;
+                                mappingFrequencySelect.dispatchEvent(new Event('change'));
+                                document.getElementById('mapBtn').disabled = false;
+                            }
+
+                            // Also select first frequency in PaySpace section
+                            setTimeout(() => {
+                                const payspaceFrequencySelect = document.getElementById('payspaceFrequencySelect');
+                                if (!payspaceFrequencySelect.disabled && payspaceFrequencySelect.options.length > 1) {
+                                    payspaceFrequencySelect.selectedIndex = 1;
+                                    payspaceFrequencySelect.dispatchEvent(new Event('change'));
+                                }
+                            }, 500);
+                        }, 1500); // Delay to allow frequencies to load
+
+                    } catch (error) {
+                        console.log('No company match found for Logical ID:', error);
+                        resultDiv.innerHTML += `
+                <div class="alert alert-warning mt-2">
+                    No company match found for Logical ID: ${result.logicalIdPrefix}. Please select company manually.
+                </div>
+            `;
+                    }
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                console.error('Upload error:', error);
+            }
+        });
+
+        // Enable map button when frequency is selected
+        document.getElementById('mappingFrequencySelect').addEventListener('change', () => {
+            document.getElementById('mapBtn').disabled = false;
+        });
+
+        // Map entries
+        document.getElementById('mapBtn').addEventListener('click', async () => {
+            const companyId = document.getElementById('mappingCompanySelect').value;
+            const frequency = document.getElementById('mappingFrequencySelect').value;
+            const resultDiv = document.getElementById('mappingResult');
+
+            resultDiv.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+            try {
+                const result = await callApi(`/waitingevents/map/${companyId}/${frequency}`, 'POST');
+
+                if (result.unmappedEntries && result.unmappedEntries > 0) {
+                    resultDiv.innerHTML = `
+                                <div class="alert alert-warning">
+                                    <h5>${result.message}</h5>
+                                    <p>Unmapped entries: ${result.unmappedEntries}</p>
+                                    <div>
+                                        <strong>Unmapped pay elements:</strong>
+                                        <ul>
+                                            ${result.unmappedPayElements.map(el => `<li>${el}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                </div>
+                            `;
+                } else {
+                    resultDiv.innerHTML = `
+                                <div class="alert alert-success">
+                                    <h5>${result.message}</h5>
+                                    <p>Total entries: ${result.totalOriginalEntries}</p>
+                                    <p>Mapped entries: ${result.totalMappedEntries}</p>
+                                    <p>Unique employees: ${result.summary.uniqueEmployees}</p>
+                                    <p>Distinct pay elements: ${result.summary.payElements}</p>
+                                    <p>Total amount: $${result.summary.totalAmount.toFixed(2)}</p>
+                                </div>
+                            `;
+
+                    document.getElementById('exportMappedBtn').disabled = false;
+
+                    // If not already enabled by logical ID auto-selection
+                    if (document.getElementById('payspaceCompanySelect').disabled) {
+                        document.getElementById('payspaceCompanySelect').disabled = false;
+                    }
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error mapping entries</div>`;
+                console.error('Mapping error:', error);
+            }
+        });
+
+        // Export original processed file
+        document.getElementById('exportOriginalBtn').addEventListener('click', async () => {
+            try {
+                const blob = await callApi('/waitingevents/export-original');
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `OriginalEntries_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('Error exporting file');
+            }
+        });
+
+        // Export mapped file
+        document.getElementById('exportMappedBtn').addEventListener('click', async () => {
+            try {
+                const blob = await callApi('/waitingevents/export-mapped');
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `MappedEntries_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('Error exporting file');
+            }
+        });
+
+        // Load frequencies when PaySpace company is selected
+        document.getElementById('payspaceFrequencySelect').addEventListener('change', async (e) => {
+            const companyId = document.getElementById('payspaceCompanySelect').value;
+            const frequency = e.target.value;
+            const runSelect = document.getElementById('payspaceRunSelect');
+
+            runSelect.innerHTML = '<option selected disabled>Choose run...</option>';
+            runSelect.disabled = true;
+
+            try {
+                const runs = await callApi(`/waitingevents/runs/${companyId}/${frequency}`);
+
+                if (runs && runs.length > 0) {
+                    runs.forEach(run => {
+                        const option = document.createElement('option');
+                        option.value = run.value;
+                        option.textContent = run.description;
+                        runSelect.appendChild(option);
+                    });
+
+                    runSelect.disabled = false;
+                } else {
+                    alert('No runs found for this frequency');
+                }
+            } catch (error) {
+                console.error('Error loading runs:', error);
+            }
+        });
+
+        // Enable upload button when run is selected
+        document.getElementById('payspaceRunSelect').addEventListener('change', () => {
+            document.getElementById('uploadToPayspaceBtn').disabled = false;
+        });
+
+        // Upload to PaySpace
+        document.getElementById('uploadToPayspaceBtn').addEventListener('click', async () => {
+            const companyId = document.getElementById('payspaceCompanySelect').value;
+            const frequency = encodeURIComponent(document.getElementById('payspaceFrequencySelect').value.replace(/[\(\)\/]/g, ' '));
+            const run = encodeURIComponent(document.getElementById('payspaceRunSelect').value.replace(/[\(\)\/]/g, ' '));
+            const resultDiv = document.getElementById('uploadToPayspaceResult');
+
+            resultDiv.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+            try {
+                console.log(`Sending upload request with: CompanyID=${companyId}, Frequency=${frequency}, Run=${run}`);
+
+                const result = await callApi(`/waitingevents/upload-to-payspace/${companyId}?frequency=${frequency}&run=${run}`, 'POST');
+
+                let alertClass = result.success ? 'success' : 'danger';
+
+                let resultHtml = `
+            <div class="alert alert-${alertClass}">
+                <h5>${result.message || 'Upload completed'}</h5>
+                <p>${result.details || ''}</p>
+                <p>Company: ${result.company || 'Unknown'}</p>
+                <p>Frequency: ${result.frequency || 'Unknown'}</p>
+                <p>Entries: ${result.entriesCount || 0}</p>
+                ${result.failureDetails ? `<p>${result.failureDetails}</p>` : ''}
+                ${!result.uploadHistorySaved ?
+                        '<div class="alert alert-warning mt-2">Note: The API call succeeded but we could not save the history record to the database.</div>' : ''}
+                ${result.errors && result.errors.length > 0 ? `
+                    <div class="mt-3">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#errorDetails">
+                            Show Error Details
+                        </button>
+                        <div class="collapse mt-2" id="errorDetails">
+                            <div class="card card-body">
+                                <ul>
+                                    ${result.errors.map(err => `<li>${String(err).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+                resultDiv.innerHTML = resultHtml;
+
+                // link to view upload history only if it was saved
+                if (result.uploadHistorySaved && result.uploadHistoryId) {
+                    const historyLink = document.createElement('div');
+                    historyLink.classList.add('mt-2');
+                    historyLink.innerHTML = `
+                <button class="btn btn-info view-upload-history" data-id="${result.uploadHistoryId}">
+                    <i class="bi bi-clock-history"></i> View Complete Report
+                </button>
+            `;
+
+                    historyLink.querySelector('.view-upload-history').addEventListener('click', (e) => {
+                        const historyId = e.target.closest('button').getAttribute('data-id');
+                        viewHistoryDetails(historyId);
+                    });
+
+                    resultDiv.appendChild(historyLink);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message || 'Unknown error occurred'}</div>`;
+                console.error('Upload error:', error);
+            }
+        });
+
+        function addHistoryLinkToResponse(resultDiv, uploadHistoryId) {
+            const historyLink = document.createElement('div');
+            historyLink.classList.add('mt-3');
+            historyLink.innerHTML = `
+        <button class="btn btn-sm btn-info view-upload-history" data-id="${uploadHistoryId}">
+            <i class="bi bi-clock-history"></i> View Upload Details
+        </button>
+    `;
+
+            historyLink.querySelector('.view-upload-history').addEventListener('click', (e) => {
+                const historyId = e.target.closest('button').getAttribute('data-id');
+                viewHistoryDetails(historyId);
+            });
+
+            resultDiv.appendChild(historyLink);
+        }
+
+        document.getElementById('viewUploadHistoryBtn').addEventListener('click', async () => {
+            const historyContainer = document.getElementById('uploadHistoryContainer');
+            historyContainer.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            const historyModal = new bootstrap.Modal(document.getElementById('uploadHistoryModal'));
+            historyModal.show();
+
+            try {
+                const history = await callApi('/uploadhistory');
+
+                if (history && history.length > 0) {
+                    let tableHtml = `
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Company</th>
+                                <th>Frequency</th>
+                                <th>Run</th>
+                                <th>Entries</th>
+                                <th>Success/Fail</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+                    history.forEach(entry => {
+                        const statusBadge = entry.success
+                            ? '<span class="badge bg-success">Success</span>'
+                            : '<span class="badge bg-danger">Failed</span>';
+
+                        tableHtml += `
+                    <tr>
+                        <td>${entry.uploadDate}</td>
+                        <td>${entry.companyName} (${entry.companyCode})</td>
+                        <td>${entry.frequency}</td>
+                        <td>${entry.run}</td>
+                        <td>${entry.totalEntries}</td>
+                        <td>${entry.successfulEntries}/${entry.failedEntries}</td>
+                        <td>${statusBadge}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary view-history-details" data-id="${entry.id}">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                    });
+
+                    tableHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+                    historyContainer.innerHTML = tableHtml;
+
+                    // Add event listeners to view buttons
+                    document.querySelectorAll('.view-history-details').forEach(button => {
+                        button.addEventListener('click', (e) => {
+                            const historyId = e.target.closest('button').getAttribute('data-id');
+                            viewHistoryDetails(historyId);
+                        });
+                    });
+                } else {
+                    historyContainer.innerHTML = '<div class="alert alert-info">No upload history found.</div>';
+                }
+            } catch (error) {
+                historyContainer.innerHTML = `<div class="alert alert-danger">Error loading upload history: ${error.message}</div>`;
+                console.error('Error loading upload history:', error);
+            }
+        });
+
+        // View history details
+        async function viewHistoryDetails(historyId) {
+            currentHistoryId = historyId;
+            const detailsContainer = document.getElementById('uploadHistoryDetailsContainer');
+            detailsContainer.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            const detailsModal = new bootstrap.Modal(document.getElementById('uploadHistoryDetailsModal'));
+            detailsModal.show();
+
+            try {
+                const details = await callApi(`/uploadhistory/${historyId}`);
+
+                let summaryHtml = `
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">Summary</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Date:</strong> ${details.uploadDate}</p>
+                            <p><strong>Company:</strong> ${details.companyName} (${details.companyCode})</p>
+                            <p><strong>Frequency:</strong> ${details.frequency}</p>
+                            <p><strong>Run:</strong> ${details.run}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Total Entries:</strong> ${details.totalEntries}</p>
+                            <p><strong>Successful:</strong> ${details.successfulEntries}</p>
+                            <p><strong>Failed:</strong> ${details.failedEntries}</p>
+                            <p><strong>Status:</strong> ${details.success ? '<span class="badge bg-success">Success</span>' : '<span class="badge bg-danger">Failed</span>'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+                let entriesHtml = `
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">Entry Details</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Employee ID</th>
+                        <th>Employee Name</th>
+                        <th>Pay Element ID</th>
+                        <th>Component Code</th>
+                        <th>Input Type</th>
+                        <th>Input Quantity</th>
+                        <th>Status</th>
+                        <th>Error Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+`;
+
+                if (details.entries && details.entries.length > 0) {
+                    details.entries.forEach(entry => {
+                        const status = entry.success
+                            ? '<span class="badge bg-success">Success</span>'
+                            : '<span class="badge bg-danger">Failed</span>';
+
+                        entriesHtml += `
+            <tr>
+                <td>${entry.employeeId}</td>
+                <td>${entry.employeeName || ''}</td>
+                <td>${entry.payElementId}</td>
+                <td>${entry.componentCode}</td>
+                <td>${entry.inputType || 'Amount'}</td>
+                <td>${entry.inputQuantity || entry.amount || ''}</td>
+                <td>${status}</td>
+                <td>${entry.errorMessage || ''}</td>
+            </tr>
+        `;
+                    });
+                } else {
+                    entriesHtml += `
+                <tr>
+                    <td colspan="7" class="text-center">No entry details available</td>
+                </tr>
+            `;
+                }
+
+                entriesHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+                detailsContainer.innerHTML = summaryHtml + entriesHtml;
+
+            } catch (error) {
+                detailsContainer.innerHTML = `<div class="alert alert-danger">Error loading upload history details: ${error.message}</div>`;
+                console.error('Error loading upload history details:', error);
+            }
+        }
+
+        // Download Excel report
+        document.getElementById('downloadHistoryBtn').addEventListener('click', async () => {
+            if (!currentHistoryId) {
+                alert('No history record is currently selected.');
+                return;
+            }
+
+            try {
+                const blob = await callApi(`/uploadhistory/download/${currentHistoryId}`);
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `Upload_History_${currentHistoryId}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Error downloading history report:', error);
+                alert(`Error downloading report: ${error.message}`);
+            }
+        });
+
+
+        // Mapping management
+        document.getElementById('loadMappingsBtn').addEventListener('click', async () => {
+            const companyId = document.getElementById('viewMappingCompanySelect').value;
+            const tableContainer = document.getElementById('mappingsTableContainer');
+
+            tableContainer.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+            try {
+                const mappings = await callApi(`/payelementmappings/entity/${companyId}`);
+                console.log('Loaded mappings:', mappings);
+
+                if (mappings && mappings.length > 0) {
+                    let tableHtml = `
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Pay Element ID</th>
+                                            <th>Component Code</th>
+                                            <th>Frequency</th>
+                                            <th>Description</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                            `;
+
+                    mappings.forEach(mapping => {
+                        tableHtml += `
+                                    <tr>
+                                        <td>${mapping.id}</td>
+                                        <td>${mapping.payElementId}</td>
+                                        <td>${mapping.componentCode}</td>
+                                        <td>${mapping.frequency}</td>
+                                        <td>${mapping.description || ''}</td>
+                                        <td>${mapping.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary edit-mapping-btn" data-id="${mapping.id}">Edit</button>
+                                            <button class="btn btn-sm btn-outline-danger delete-mapping-btn" data-id="${mapping.id}">Delete</button>
+                                        </td>
+                                    </tr>
+                                `;
+                    });
+
+                    tableHtml += `
+                                    </tbody>
+                                </table>
+                            `;
+
+                    tableContainer.innerHTML = tableHtml;
+
+                    document.querySelectorAll('.edit-mapping-btn').forEach(button => {
+                        button.addEventListener('click', () => {
+                            const mappingId = button.getAttribute('data-id');
+                            const mapping = mappings.find(m => m.id == mappingId);
+                            if (mapping) {
+                                if (!mapping.legalEntityId) {
+                                    mapping.legalEntityId = parseInt(companyId);
+                                }
+                                openEditModal(mapping.id, mapping);
+                            } else {
+                                console.error(`Mapping with id ${mappingId} not found`);
+                            }
+                        });
+                    });
+
+                    document.querySelectorAll('.delete-mapping-btn').forEach(button => {
+                        button.addEventListener('click', async () => {
+                            if (confirm('Are you sure you want to delete this mapping?')) {
+                                const mappingId = button.getAttribute('data-id');
+                                try {
+                                    await callApi(`/payelementmappings/${mappingId}`, 'DELETE');
+                                    document.getElementById('loadMappingsBtn').click(); // Reload the table
+                                } catch (error) {
+                                    console.error('Error deleting mapping:', error);
+                                    alert(`Error deleting mapping: ${error.message}`);
+                                }
+                            }
+                        });
+                    });
+                } else {
+                    tableContainer.innerHTML = '<div class="alert alert-info">No mappings found for this company.</div>';
+                }
+            } catch (error) {
+                tableContainer.innerHTML = '<div class="alert alert-danger">Error loading mappings</div>';
+                console.error('Error loading mappings:', error);
+            }
+        });
+
+        // Add new mapping form submission
+        document.getElementById('addMappingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const resultDiv = document.getElementById('addMappingResult');
+            const companySelect = document.getElementById('addMappingCompanySelect');
+
+            if (companySelect.value === '' || companySelect.selectedIndex === 0) {
+                resultDiv.innerHTML = '<div class="alert alert-danger">Please select a company</div>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+            try {
+                const request = {
+                    LegalEntityId: parseInt(companySelect.value),
+                    PayElementId: document.getElementById('payElementId').value.trim(),
+                    ComponentCode: document.getElementById('componentCode').value.trim(),
+                    Frequency: document.getElementById('frequency').value.trim(),
+                    Description: document.getElementById('description').value.trim() || "",
+                    IsActive: document.getElementById('isActive').checked
+                };
+
+                console.log("Creating new mapping with data:", request);
+
+                const response = await callApi('/payelementmappings', 'POST', request);
+
+                resultDiv.innerHTML = '<div class="alert alert-success">Mapping added successfully</div>';
+                document.getElementById('addMappingForm').reset();
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error adding mapping: ${error.message || 'Unknown error'}</div>`;
+                console.error('Error adding mapping:', error);
+            }
+        });
+
+        // Bulk upload mappings
+        document.getElementById('bulkUploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('mappingFileInput');
+            const resultDiv = document.getElementById('bulkUploadResult');
+
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<div class="alert alert-danger">Please select a file</div>';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            resultDiv.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+            try {
+                const result = await callApi('/payelementmappings/bulk-upload', 'POST', formData);
+
+                let alertClass = 'success';
+                if (result.failureCount > 0) {
+                    alertClass = 'warning';
+                }
+
+                resultDiv.innerHTML = `
+                            <div class="alert alert-${alertClass}">
+                                <h5>File processed: ${result.fileName}</h5>
+                                <p>Total rows: ${result.totalRows}</p>
+                                <p>Successful: ${result.successCount}</p>
+                                <p>Failed: ${result.failureCount}</p>
+                                ${result.errors && result.errors.length > 0 ? `
+                                    <div class="mt-3">
+                                        <strong>Errors:</strong>
+                                        <ul>
+                                            ${result.errors.map(err => `<li>${err}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+
+                document.getElementById('bulkUploadForm').reset();
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="alert alert-danger">Error uploading mappings</div>';
+                console.error('Error uploading mappings:', error);
+            }
+        });
+
+        // Download template
+        document.getElementById('downloadTemplateBtn').addEventListener('click', async () => {
+            try {
+                const blob = await callApi('/payelementmappings/download-template');
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `MappingTemplate_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Error downloading template');
+            }
+        });
+
+        // Load companies for Logical ID management
+        document.getElementById('loadCompaniesForLogicalIdBtn').addEventListener('click', async () => {
+            const tableContainer = document.getElementById('logicalIdTableContainer');
+
+            tableContainer.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+            try {
+                const companies = await callApi('/waitingevents/db-companies');
+
+                if (companies && companies.length > 0) {
+                    let tableHtml = `
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Company Code</th>
+                                            <th>Company Name</th>
+                                            <th>Logical ID Prefix</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                            `;
+
+                    companies.forEach(company => {
+                        tableHtml += `
+                                    <tr data-company-id="${company.id}">
+                                        <td>${company.id}</td>
+                                        <td>${company.companyCode}</td>
+                                        <td>${company.companyName}</td>
+                                        <td>
+                                            <input type="text" class="form-control logical-id-input"
+                                                value="${company.logicalIdPrefix || ''}"
+                                                placeholder="e.g. BNG-GH001">
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-primary save-logical-id-btn">Save</button>
+                                        </td>
+                                    </tr>
+                                `;
+                    });
+
+                    tableHtml += `
+                                    </tbody>
+                                </table>
+                            `;
+
+                    tableContainer.innerHTML = tableHtml;
+
+                    // Add event listeners to save buttons
+                    document.querySelectorAll('.save-logical-id-btn').forEach(button => {
+                        button.addEventListener('click', async (e) => {
+                            const row = e.target.closest('tr');
+                            const companyId = row.getAttribute('data-company-id');
+                            const logicalIdInput = row.querySelector('.logical-id-input');
+                            const logicalIdPrefix = logicalIdInput.value.trim();
+
+                            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                            button.disabled = true;
+
+                            try {
+                                await callApi(`/payelementmappings/legal-entity/${companyId}/logical-id`, 'PUT', {
+                                    logicalIdPrefix: logicalIdPrefix
+                                });
+
+                                button.innerHTML = '✓';
+                                setTimeout(() => {
+                                    button.innerHTML = 'Save';
+                                    button.disabled = false;
+                                }, 2000);
+                            } catch (error) {
+                                console.error('Error saving logical ID:', error);
+                                button.innerHTML = '✗';
+                                setTimeout(() => {
+                                    button.innerHTML = 'Save';
+                                    button.disabled = false;
+                                }, 2000);
+                                alert(`Error saving: ${error.message || 'Unknown error'}`);
+                            }
+                        });
+                    });
+                } else {
+                    tableContainer.innerHTML = '<div class="alert alert-info">No companies found.</div>';
+                }
+            } catch (error) {
+                tableContainer.innerHTML = '<div class="alert alert-danger">Error loading companies</div>';
+                console.error('Error loading companies:', error);
+            }
+        });
+
+        // Edit modal
+        function createEditModal() {
+            const modalHtml = `
+                        <div class="modal fade" id="editMappingModal" tabindex="-1" aria-labelledby="editMappingModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="editMappingModalLabel">Edit Mapping</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <form id="editMappingForm">
+                                            <input type="hidden" id="editMappingId">
+                                            <input type="hidden" id="editLegalEntityId">
+                                            <div class="mb-3">
+                                                <label for="editPayElementId" class="form-label">Pay Element ID</label>
+                                                <input type="text" class="form-control" id="editPayElementId" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="editComponentCode" class="form-label">Component Code</label>
+                                                <input type="text" class="form-control" id="editComponentCode" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="editFrequency" class="form-label">Frequency</label>
+                                                <input type="text" class="form-control" id="editFrequency" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="editDescription" class="form-label">Description</label>
+                                                <input type="text" class="form-control" id="editDescription">
+                                            </div>
+                                            <div class="form-check mb-3">
+                                                <input class="form-check-input" type="checkbox" id="editIsActive">
+                                                <label class="form-check-label" for="editIsActive">
+                                                    Active
+                                                </label>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="button" class="btn btn-primary" id="saveEditBtn">Save Changes</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            document.getElementById('saveEditBtn').addEventListener('click', saveEditMapping);
+        }
+
+        // Open edit modal
+        function openEditModal(id, mapping) {
+            console.log('Opening edit modal for mapping:', mapping);
+            document.getElementById('editMappingId').value = id;
+            document.getElementById('editLegalEntityId').value = mapping.legalEntityId;
+            document.getElementById('editPayElementId').value = mapping.payElementId;
+            document.getElementById('editComponentCode').value = mapping.componentCode;
+            document.getElementById('editFrequency').value = mapping.frequency;
+            document.getElementById('editDescription').value = mapping.description || '';
+            document.getElementById('editIsActive').checked = mapping.isActive;
+
+            const modal = new bootstrap.Modal(document.getElementById('editMappingModal'));
+            modal.show();
+        }
+
+        // Save edited mapping
+        async function saveEditMapping() {
+            try {
+                const id = document.getElementById('editMappingId').value;
+
+                const payElementId = document.getElementById('editPayElementId').value.trim();
+                const componentCode = document.getElementById('editComponentCode').value.trim();
+                const frequency = document.getElementById('editFrequency').value.trim();
+                const description = (document.getElementById('editDescription').value || '').trim();
+                const isActive = document.getElementById('editIsActive').checked;
+
+                if (!payElementId || !componentCode || !frequency) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+
+                const request = {
+                    PayElementId: payElementId,
+                    ComponentCode: componentCode,
+                    Frequency: frequency,
+                    Description: description,
+                    IsActive: isActive
+                };
+
+                console.log(`Updating mapping ${id} with data:`, request);
+
+                await callApi(`/payelementmappings/${id}`, 'PUT', request);
+
+                const modalElement = document.getElementById('editMappingModal');
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                modal.hide();
+
+                document.getElementById('loadMappingsBtn').click();
+
+            } catch (error) {
+                console.error('Error updating mapping:', error);
+                alert('Error updating mapping: ' + (error.message || 'Unknown error'));
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOM content loaded, starting initialization");
+            loadCompanies();
+            createEditModal();
+        });
+    </script>
+</body>
+</html>
