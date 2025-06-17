@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -68,6 +68,8 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     {
                         UniqueEmployees = entries.Select(e => e.EmployeeId).Distinct().Count(),
                         PayElements = entries.Select(e => e.PayElementId).Distinct().Count(),
+                        // This summary needs care: Summing 'Amount' might be misleading if values are in NumberOfUnits
+                        // For a simple summary, TotalAmount from Amount field is kept, but acknowledge its limitation.
                         TotalAmount = entries.Sum(e => e.Amount ?? 0)
                     }
                 };
@@ -234,29 +236,51 @@ namespace PaySpaceWaitingEvents.API.Controllers
                 {
                     if (mappings.TryGetValue(entry.PayElementId, out string componentCode))
                     {
+                        // Create a new PayElementEntry for the mapped list to avoid modifying _lastProcessedEntries
                         var mappedEntry = new PayElementEntry
                         {
+                            BODId = entry.BODId,
+                            RecordNumber = entry.RecordNumber,
                             PersonId = entry.PersonId,
                             EmployeeId = entry.EmployeeId,
+                            PayServId = entry.PayServId,
                             EmployeeName = entry.EmployeeName,
                             Event = entry.Event,
                             Action = entry.Action,
+                            Category = entry.Category,
+                            FieldLabel = entry.FieldLabel,
+                            Value = entry.Value, // This is the raw 'Value' from excel row, not the derived one for export
                             RowId = entry.RowId,
-                            StartDate = entry.StartDate,
                             EndDate = entry.EndDate,
-                            Amount = entry.Amount,
-                            NumberOfUnits = entry.NumberOfUnits,
-                            UnitType = entry.UnitType,
-                            PayElementId = entry.PayElementId,
                             PayElementType = entry.PayElementType,
-                            PaySpaceCompCode = componentCode
+                            PayElementId = entry.PayElementId,
+                            PaySpaceCompCode = componentCode, // Mapped Component Code
+                            UnitType = entry.UnitType,
+                            NumberOfUnits = entry.NumberOfUnits,
+                            Amount = entry.Amount,
+                            EmployeeFirstName = entry.EmployeeFirstName,
+                            EmployeeLastName = entry.EmployeeLastName,
+                            EmployeeNumber = entry.EmployeeNumber,
+                            BirthDate = entry.BirthDate,
+                            Title = entry.Title,
+                            Gender = entry.Gender,
+                            Language = entry.Language,
+                            CitizenshipCountry = entry.CitizenshipCountry,
+                            TerminationReason = entry.TerminationReason,
+                            TerminationDate = entry.TerminationDate,
+                            PositionTitle = entry.PositionTitle,
+                            CostCenter = entry.CostCenter,
+                            CustomFields = new Dictionary<string, string>(entry.CustomFields),
+                            StartDate = entry.StartDate
                         };
-
                         mappedEntries.Add(mappedEntry);
                     }
                     else
                     {
-                        unmappedElements.Add(entry.PayElementId);
+                        if (!string.IsNullOrEmpty(entry.PayElementId)) // Only add if PayElementId was present
+                        {
+                            unmappedElements.Add(entry.PayElementId);
+                        }
                     }
                 }
 
@@ -268,7 +292,8 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     {
                         Message = "Mapping failed. There are unmapped pay elements.",
                         TotalOriginalEntries = _lastProcessedEntries.Count,
-                        UnmappedEntries = unmappedElements.Count,
+                        TotalMappedEntries = mappedEntries.Count, // Should be _lastProcessedEntries.Count - unmappedElements.Count
+                        UnmappedPayElementsCount = unmappedElements.Count,
                         UnmappedPayElements = unmappedElements.ToList()
                     });
                 }
@@ -282,7 +307,7 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     {
                         UniqueEmployees = mappedEntries.Select(e => e.EmployeeId).Distinct().Count(),
                         PayElements = mappedEntries.Select(e => e.PayElementId).Distinct().Count(),
-                        TotalAmount = mappedEntries.Sum(e => e.Amount ?? 0),
+                        TotalAmount = mappedEntries.Sum(e => e.Amount ?? 0), // Again, this sum is on the 'Amount' field
                     }
                 };
 
@@ -302,8 +327,8 @@ namespace PaySpaceWaitingEvents.API.Controllers
             {
                 return NotFound("No processed entries found. Please upload a file first.");
             }
-
-            return ExportToExcel(_lastProcessedEntries, "OriginalEntries");
+            // Pass "OriginalEntries" to distinguish it, though the export logic is now unified
+            return ExportToExcel(_lastProcessedEntries, "ProcessedEntries");
         }
 
         [HttpGet("export-mapped")]
@@ -330,7 +355,6 @@ namespace PaySpaceWaitingEvents.API.Controllers
                 _logger.LogInformation($"Starting upload to PaySpace for company ID {companyId}, frequency {frequency}, run {run}");
                 _logger.LogInformation($"Uploading {_lastMappedEntries.Count} mapped entries");
 
-                // Group entries by category for processing
                 var entriesByCategory = _lastMappedEntries
                     .GroupBy(e =>
                     {
@@ -341,18 +365,15 @@ namespace PaySpaceWaitingEvents.API.Controllers
                         if (e.Event == "Data Change" && e.Category == "Pay Rate") return "Pay Rate";
                         if (e.Event == "Data Change" && e.Category == "Payment Instruction") return "Payment Instruction";
                         if (e.Event == "Termination") return "Employment";
-                        return "Data Change";
+                        return "Data Change"; // Default category if none of the above
                     })
                     .ToDictionary(g => g.Key, g => g.ToList());
 
-                // Step 1: Call PaySpace API for all categories
                 var apiResponse = await _paySpaceApiService.SubmitAllCategoriesAsync(companyId, frequency, run, entriesByCategory);
 
                 _logger.LogInformation($"PaySpace API call completed with success={apiResponse.Success}, " +
                                       $"successful entries={apiResponse.SuccessfulEntries}, " +
                                       $"failed entries={apiResponse.FailedEntries}");
-
-                // Step 2: Create the initial response object
                 var responseData = new
                 {
                     success = apiResponse.Success,
@@ -370,13 +391,11 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     successfulEntries = apiResponse.SuccessfulEntries,
                     failedEntries = apiResponse.FailedEntries,
                     errors = apiResponse.Errors.Any() ? apiResponse.Errors : null,
-                    results = apiResponse.Results,
+                    results = apiResponse.Results, // These are results from PaySpace API
                     uploadHistorySaved = false,
                     uploadHistoryId = 0,
-                    entriesSaved = 0
+                    entriesSavedToDb = 0 // Renamed for clarity
                 };
-
-                // Step 3: Try to save history, but continue even if it fails
                 try
                 {
                     string companyName = "Unknown";
@@ -396,8 +415,6 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     {
                         _logger.LogWarning(ex, "Could not retrieve company details for history record");
                     }
-
-                    // Create history record
                     var uploadHistory = new UploadHistory
                     {
                         UploadTimestamp = DateTime.UtcNow,
@@ -407,132 +424,118 @@ namespace PaySpaceWaitingEvents.API.Controllers
                         Frequency = frequency ?? "Unknown Frequency",
                         Run = run ?? "Unknown Run",
                         TotalEntries = _lastMappedEntries.Count,
-                        SuccessfulEntries = apiResponse.SuccessfulEntries,
-                        FailedEntries = apiResponse.FailedEntries,
-                        Success = apiResponse.Success,
+                        SuccessfulEntries = apiResponse.SuccessfulEntries, // From PaySpace response
+                        FailedEntries = apiResponse.FailedEntries,     // From PaySpace response
+                        Success = apiResponse.Success,                 // Overall success from PaySpace
                         FileName = "Manual Upload"
                     };
-
-                    // Save 
                     _dbContext.UploadHistories.Add(uploadHistory);
                     await _dbContext.SaveChangesAsync();
-
                     _logger.LogInformation($"Successfully saved upload history with ID {uploadHistory.Id}");
 
-                    // Now process entries with direct SQL
-                    int entriesSaved = 0;
-
+                    int entriesSavedToDbCount = 0;
                     if (apiResponse.Results != null && apiResponse.Results.Any())
                     {
-                        foreach (var result in apiResponse.Results.Take(50))
+                        foreach (var result in apiResponse.Results.Take(50)) // Process up to 50 results for history details
                         {
                             try
                             {
+                                // Find the original entry that corresponds to this result
                                 var originalEntry = _lastMappedEntries.FirstOrDefault(e =>
-                                    e.EmployeeId == result.EmployeeId &&
-                                    e.PayElementId == result.PayElementId);
+                                    e.EmployeeId == result.EmployeeId && // Assuming result has EmployeeId
+                                    e.PayElementId == result.PayElementId); // Assuming result has PayElementId
 
-                                // Determine input type and value
-                                string inputType = "Amount"; // Default
-                                decimal inputValue = 0;
+                                string historyInputType = "Amount"; // Default for history record
+                                decimal historyInputValue = 0;
 
                                 if (originalEntry != null)
                                 {
-                                    if (!string.IsNullOrEmpty(originalEntry.UnitType))
+                                    string entryUnitTypeLower = originalEntry.UnitType?.ToLowerInvariant();
+                                    if (entryUnitTypeLower == "days")
                                     {
-                                        if (originalEntry.UnitType.Equals("days", StringComparison.OrdinalIgnoreCase))
-                                        {
-                                            inputType = "Days";
-                                            inputValue = originalEntry.NumberOfUnits ?? 0;
-                                        }
-                                        else if (originalEntry.UnitType.Equals("hours", StringComparison.OrdinalIgnoreCase))
-                                        {
-                                            inputType = "Hours";
-                                            inputValue = originalEntry.NumberOfUnits ?? 0;
-                                        }
-                                        else if (originalEntry.UnitType.Equals("units", StringComparison.OrdinalIgnoreCase))
-                                        {
-                                            inputType = "Units";
-                                            inputValue = originalEntry.NumberOfUnits ?? 0;
-                                        }
-                                        else
-                                        {
-                                            inputValue = originalEntry.Amount ?? 0;
-                                        }
+                                        historyInputType = "Days";
+                                        historyInputValue = originalEntry.NumberOfUnits ?? 0;
                                     }
+                                    else if (entryUnitTypeLower == "hours")
+                                    {
+                                        historyInputType = "Hours";
+                                        historyInputValue = originalEntry.NumberOfUnits ?? 0;
+                                    }
+                                    else if (entryUnitTypeLower == "units")
+                                    {
+                                        historyInputType = "Units"; // Specific for history if "units"
+                                        historyInputValue = originalEntry.NumberOfUnits ?? 0;
+                                    }
+                                    // If UnitType is something else (e.g. "pieces") and NumberOfUnits has a value,
+                                    // and Amount is null, this logic defaults to Amount=0 for history.
+                                    // This aligns with export logic: if not days/hours/units, primary value is Amount.
                                     else if (originalEntry.Amount.HasValue)
                                     {
-                                        inputValue = originalEntry.Amount.Value;
+                                        historyInputType = "Amount";
+                                        historyInputValue = originalEntry.Amount.Value;
+                                    }
+                                    // Fallback if UnitType is e.g. "PIECES" and only NumberOfUnits is set
+                                    else if (!string.IsNullOrEmpty(originalEntry.UnitType) && originalEntry.NumberOfUnits.HasValue)
+                                    {
+                                        historyInputType = originalEntry.UnitType; // Use original unit type if not standard
+                                        historyInputValue = originalEntry.NumberOfUnits.Value;
                                     }
                                 }
 
-                                // Prepare data with truncation
                                 string empId = (result.EmployeeId ?? "Unknown").Substring(0, Math.Min(50, (result.EmployeeId ?? "Unknown").Length));
                                 string empName = (originalEntry?.EmployeeName ?? "Unknown").Substring(0, Math.Min(100, (originalEntry?.EmployeeName ?? "Unknown").Length));
-                                string payElementId = (result.PayElementId ?? "Unknown").Substring(0, Math.Min(50, (result.PayElementId ?? "Unknown").Length));
-                                string compCode = (result.ComponentCode ?? "").Substring(0, Math.Min(50, (result.ComponentCode ?? "").Length));
+                                string payElementIdStr = (result.PayElementId ?? "Unknown").Substring(0, Math.Min(50, (result.PayElementId ?? "Unknown").Length));
+                                string compCode = (result.ComponentCode ?? originalEntry?.PaySpaceCompCode ?? "").Substring(0, Math.Min(50, (result.ComponentCode ?? originalEntry?.PaySpaceCompCode ?? "").Length));
                                 string errorMsg = result.ErrorMessage;
 
-                                if (errorMsg != null && errorMsg.Length > 500)
-                                    errorMsg = errorMsg.Substring(0, 500);
-                                else if (errorMsg == null)
-                                    errorMsg = "";
+                                if (errorMsg != null && errorMsg.Length > 500) errorMsg = errorMsg.Substring(0, 500);
+                                else if (errorMsg == null) errorMsg = "";
 
-                                // Create entry with new fields
                                 var historyEntry = new UploadHistoryEntry
                                 {
                                     UploadHistoryId = uploadHistory.Id,
                                     EmployeeId = empId,
                                     EmployeeName = empName,
-                                    PayElementId = payElementId,
+                                    PayElementId = payElementIdStr,
                                     ComponentCode = compCode,
-                                    Success = result.Success,
+                                    Success = result.Success, // Success of this specific entry from PaySpace
                                     ErrorMessage = errorMsg,
-                                    Amount = inputValue,
-                                    InputType = inputType,
-                                    InputQuantity = inputValue
+                                    Amount = historyInputValue,
+                                    InputType = historyInputType,
+                                    InputQuantity = historyInputValue
                                 };
-
-                                // Use upload history service to save entry
                                 bool entrySaved = await _uploadHistoryService.SaveEntryAsync(historyEntry);
-                                if (entrySaved)
-                                {
-                                    entriesSaved++;
-                                }
+                                if (entrySaved) entriesSavedToDbCount++;
                             }
                             catch (Exception entryEx)
                             {
-                                _logger.LogError(entryEx, $"Error saving entry for employee {result.EmployeeId}");
+                                _logger.LogError(entryEx, $"Error saving history entry for employee {result.EmployeeId}, PayElement {result.PayElementId}");
                             }
                         }
                     }
-
-                    _logger.LogInformation($"Saved {entriesSaved} out of {apiResponse.Results?.Count ?? 0} entries");
-
-                    // Create the updated response with history details
+                    _logger.LogInformation($"Saved {entriesSavedToDbCount} detailed entry results to history out of {apiResponse.Results?.Count ?? 0} results from PaySpace.");
                     return Ok(new
                     {
-                        success = responseData.success,
-                        message = responseData.message,
-                        details = responseData.details,
-                        failureDetails = responseData.failureDetails,
-                        company = responseData.company,
-                        frequency = responseData.frequency,
-                        run = responseData.run,
-                        entriesCount = responseData.entriesCount,
-                        successfulEntries = responseData.successfulEntries,
-                        failedEntries = responseData.failedEntries,
-                        errors = responseData.errors,
-                        results = responseData.results,
+                        responseData.success,
+                        responseData.message,
+                        responseData.details,
+                        responseData.failureDetails,
+                        responseData.company,
+                        responseData.frequency,
+                        responseData.run,
+                        responseData.entriesCount,
+                        responseData.successfulEntries,
+                        responseData.failedEntries,
+                        responseData.errors,
+                        responseData.results,
                         uploadHistorySaved = true,
                         uploadHistoryId = uploadHistory.Id,
-                        entriesSaved = entriesSaved
+                        entriesSavedToDb = entriesSavedToDbCount
                     });
                 }
                 catch (Exception dbEx)
                 {
                     _logger.LogError(dbEx, "Database error saving upload history");
-                    // Return original response if database saving failed
                     return Ok(responseData);
                 }
             }
@@ -556,16 +559,16 @@ namespace PaySpaceWaitingEvents.API.Controllers
                 }
 
                 _logger.LogInformation("Testing PaySpace API connection");
-                var companies = _paySpaceApiService.GetAvailableFrequencies(legalEntity.Id);
+                var companies = _paySpaceApiService.GetAvailableFrequencies(legalEntity.Id); // This was GetAvailableCompanies before, assuming Frequencies is a valid test
 
-                if (companies != null)
+                if (companies != null) // Check if the result itself is not null; content check might be needed
                 {
-                    _logger.LogInformation("Connection successful");
+                    _logger.LogInformation("Connection successful (API call returned data)");
                     return Ok(new { success = true, message = "Connection successful" });
                 }
 
-                _logger.LogWarning("Connection test returned null result");
-                return BadRequest(new { success = false, message = "Connection test returned null result" });
+                _logger.LogWarning("Connection test returned null or empty result from PaySpace API.");
+                return BadRequest(new { success = false, message = "Connection test returned null or empty result." });
             }
             catch (Exception ex)
             {
@@ -574,6 +577,7 @@ namespace PaySpaceWaitingEvents.API.Controllers
             }
         }
 
+        // Unified ExportToExcel method
         private IActionResult ExportToExcel(List<PayElementEntry> entries, string fileNamePrefix)
         {
             try
@@ -587,15 +591,16 @@ namespace PaySpaceWaitingEvents.API.Controllers
                 headerFont.IsBold = true;
                 headerStyle.SetFont(headerFont);
 
-                // master headers
+                // MODIFIED headers: Removed "Unit Type", kept "Input Type" and "Value"
                 var headers = new List<string>
-        {
-            "Logical ID", "Record Number", "Person ID", "Employee ID", "Employee Name", "Event", "Action", "Category",
-            "Start Date", "End Date", "Cost Center", "Position Title",
-            "Termination Date", "Termination Reason",
-            "First Name", "Last Name", "Title", "Gender", "Language", "Citizenship Country", "Birth Date",
-            "Pay Element ID", "Pay Element Type", "PaySpace Component Code", "Unit Type", "Input Type", "Number of Units", "Amount"
-        };
+                {
+                    "Logical ID", "Record Number", "Person ID", "Employee ID", "Employee Name", "Event", "Action", "Category",
+                    "Start Date", "End Date", "Cost Center", "Position Title",
+                    "Termination Date", "Termination Reason",
+                    "First Name", "Last Name", "Title", "Gender", "Language", "Citizenship Country", "Birth Date",
+                    "Pay Element ID", "Pay Element Type", "PaySpace Component Code",
+                    "Input Type", "Value" // Consolidated from "Unit Type", "Number of Units", "Amount"
+                };
 
                 var headerRow = sheet.CreateRow(0);
                 for (int i = 0; i < headers.Count; i++)
@@ -611,6 +616,7 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     var row = sheet.CreateRow(rowNum++);
                     int col = 0;
 
+                    // Common Fields
                     row.CreateCell(col++).SetCellValue(entry.RowId ?? "");
                     row.CreateCell(col++).SetCellValue(entry.RecordNumber ?? "");
                     row.CreateCell(col++).SetCellValue(entry.PersonId ?? "");
@@ -619,18 +625,12 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     row.CreateCell(col++).SetCellValue(entry.Event ?? "");
                     row.CreateCell(col++).SetCellValue(entry.Action ?? "");
                     row.CreateCell(col++).SetCellValue(entry.Category ?? "");
-
-                    // Core values
                     row.CreateCell(col++).SetCellValue(entry.StartDate != default ? entry.StartDate.ToString("yyyy-MM-dd") : "");
                     row.CreateCell(col++).SetCellValue(entry.EndDate != default ? entry.EndDate.ToString("yyyy-MM-dd") : "");
                     row.CreateCell(col++).SetCellValue(entry.CostCenter ?? "");
                     row.CreateCell(col++).SetCellValue(entry.PositionTitle ?? "");
-
-                    // Termination
                     row.CreateCell(col++).SetCellValue(entry.TerminationDate?.ToString("yyyy-MM-dd") ?? "");
                     row.CreateCell(col++).SetCellValue(entry.TerminationReason ?? "");
-
-                    // Personal Data
                     row.CreateCell(col++).SetCellValue(entry.EmployeeFirstName ?? "");
                     row.CreateCell(col++).SetCellValue(entry.EmployeeLastName ?? "");
                     row.CreateCell(col++).SetCellValue(entry.Title ?? "");
@@ -638,21 +638,44 @@ namespace PaySpaceWaitingEvents.API.Controllers
                     row.CreateCell(col++).SetCellValue(entry.Language ?? "");
                     row.CreateCell(col++).SetCellValue(entry.CitizenshipCountry ?? "");
                     row.CreateCell(col++).SetCellValue(entry.BirthDate.HasValue ? entry.BirthDate.Value.ToString("yyyy-MM-dd") : "");
-
-                    // Pay Element / Pay Rate
                     row.CreateCell(col++).SetCellValue(entry.PayElementId ?? "");
                     row.CreateCell(col++).SetCellValue(entry.PayElementType ?? "");
-                    row.CreateCell(col++).SetCellValue(entry.PaySpaceCompCode ?? "");
-                    row.CreateCell(col++).SetCellValue(entry.UnitType ?? "");
-                    row.CreateCell(col++).SetCellValue(entry.UnitType?.ToLower() switch
+                    row.CreateCell(col++).SetCellValue(entry.PaySpaceCompCode ?? ""); // This is the mapped one for MappedEntries export
+
+                    // Derived Input Type and Value logic
+                    string originalUnitType = entry.UnitType;
+                    string derivedInputType;
+                    string derivedValueString;
+
+                    string unitTypeLower = originalUnitType?.ToLowerInvariant();
+
+                    if (unitTypeLower == "days")
                     {
-                        "days" => "Days",
-                        "hours" => "Hours",
-                        "units" => "Units",
-                        _ => "Amount"
-                    });
-                    row.CreateCell(col++).SetCellValue(entry.NumberOfUnits?.ToString() ?? "");
-                    row.CreateCell(col++).SetCellValue(entry.Amount?.ToString() ?? "");
+                        derivedInputType = "Days";
+                        derivedValueString = entry.NumberOfUnits?.ToString() ?? "";
+                    }
+                    else if (unitTypeLower == "hours")
+                    {
+                        derivedInputType = "Hours";
+                        derivedValueString = entry.NumberOfUnits?.ToString() ?? "";
+                    }
+                    else // Includes null, empty, "units", or any other UnitType
+                    {
+                        derivedInputType = "Amount";
+                        // If UnitType was present (e.g., "units", "pieces") and NumberOfUnits has a value,
+                        // prioritize NumberOfUnits. Otherwise, use Amount.
+                        if (!string.IsNullOrEmpty(originalUnitType) && originalUnitType.ToLowerInvariant() != "days" && originalUnitType.ToLowerInvariant() != "hours" && entry.NumberOfUnits.HasValue)
+                        {
+                            derivedValueString = entry.NumberOfUnits.Value.ToString();
+                        }
+                        else
+                        {
+                            derivedValueString = entry.Amount?.ToString() ?? "";
+                        }
+                    }
+
+                    row.CreateCell(col++).SetCellValue(derivedInputType);   // Input Type (derived)
+                    row.CreateCell(col++).SetCellValue(derivedValueString); // Value (derived)
                 }
 
                 for (int i = 0; i < headers.Count; i++)
@@ -675,6 +698,5 @@ namespace PaySpaceWaitingEvents.API.Controllers
                 return StatusCode(500, new { error = "Error creating Excel file", details = ex.Message });
             }
         }
-
     }
 }
