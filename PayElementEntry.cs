@@ -1,4 +1,4 @@
-﻿public class PayElementEntry
+public class PayElementEntry
 {
     public string BODId { get; set; }
     public string RecordNumber { get; set; }
@@ -32,6 +32,7 @@
     public string Gender { get; set; }
     public string Language { get; set; }
     public string CitizenshipCountry { get; set; }
+    public string? EmailAddress { get; set; }
 
     //Employment Status
     public string TerminationReason { get; set; }
